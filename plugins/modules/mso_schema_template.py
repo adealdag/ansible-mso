@@ -51,6 +51,7 @@ options:
     description:
     - The type of template
     - Use C(multi-site) for stretched templates, or C(autonomous) for non-stretched templates.
+    - Note: This attribute cannot be changed after creation
     type: str
     choices: [multi-site, autonomous]
     default: multi-site

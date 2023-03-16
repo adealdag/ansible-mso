@@ -5,10 +5,15 @@
 # GNU General Public License v3.0+ (see LICENSE or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
+from email.policy import default
+from random import choices
+from ansible_collections.cisco.mso.plugins.module_utils.mso import MSOModule, mso_argument_spec
+from ansible.module_utils.basic import AnsibleModule
 
 __metaclass__ = type
 
-ANSIBLE_METADATA = {"metadata_version": "1.1", "status": ["preview"], "supported_by": "community"}
+ANSIBLE_METADATA = {"metadata_version": "1.1",
+                    "status": ["preview"], "supported_by": "community"}
 
 DOCUMENTATION = r"""
 ---
@@ -42,6 +47,14 @@ options:
     - The name of the template.
     type: str
     aliases: [ name ]
+  template_type: 
+    description:
+    - The type of template
+    - Use C(multi-site) for stretched templates, or C(autonomous) for non-stretched templates.
+    type: str
+    choices: [multi-site, autonomous]
+    default: multi-site
+    aliases: [ type ]
   display_name:
     description:
     - The name as displayed on the MSO web interface.
@@ -70,6 +83,7 @@ EXAMPLES = r"""
     tenant: Tenant 1
     schema: Schema 1
     template: Template 1
+    template_type: multi-site
     state: present
   delegate_to: localhost
 
@@ -111,9 +125,6 @@ EXAMPLES = r"""
 RETURN = r"""
 """
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible_collections.cisco.mso.plugins.module_utils.mso import MSOModule, mso_argument_spec
-
 
 def main():
     argument_spec = mso_argument_spec()
@@ -123,8 +134,11 @@ def main():
         schema_description=dict(type="str"),
         template_description=dict(type="str"),
         template=dict(type="str", aliases=["name"]),
+        template_type=dict(type="str", default="multi-site",
+                           choices=["multi-site", "autonomous"], aliases=["type"]),
         display_name=dict(type="str"),
-        state=dict(type="str", default="present", choices=["absent", "present", "query"]),
+        state=dict(type="str", default="present", choices=[
+                   "absent", "present", "query"]),
     )
 
     module = AnsibleModule(
@@ -143,6 +157,8 @@ def main():
     template = module.params.get("template")
     if template is not None:
         template = template.replace(" ", "")
+    template_type = "stretched-template" if module.params.get(
+        "template_type") == "multi-site" else "non-stretched-template"
     display_name = module.params.get("display_name")
     state = module.params.get("state")
 
@@ -209,6 +225,7 @@ def main():
                         name=template,
                         displayName=display_name,
                         tenantId=tenant_id,
+                        templateType=template_type,
                     )
                 ],
                 sites=[],
@@ -217,7 +234,8 @@ def main():
             if schema_description is not None:
                 payload.update(description=schema_description)
             if template_description is not None:
-                payload["templates"][0].update(description=template_description)
+                payload["templates"][0].update(
+                    description=template_description)
 
             mso.existing = payload.get("templates")[0]
 
@@ -231,12 +249,17 @@ def main():
                 displayName=display_name,
                 description=template_description,
                 tenantId=tenant_id,
+                templateType=template_type,
             )
 
             mso.sanitize(payload, collate=True)
 
-            ops.append(dict(op="replace", path=template_path + "/displayName", value=display_name))
-            ops.append(dict(op="replace", path=template_path + "/tenantId", value=tenant_id))
+            ops.append(dict(op="replace", path=template_path +
+                       "/displayName", value=display_name))
+            ops.append(dict(op="replace", path=template_path +
+                       "/tenantId", value=tenant_id))
+            ops.append(dict(op="replace", path=template_path +
+                       "/templateType", value=template_type))
 
             mso.existing = mso.proposed
         else:
@@ -245,6 +268,7 @@ def main():
                 name=template,
                 displayName=display_name,
                 tenantId=tenant_id,
+                templateType=template_type,
             )
 
             mso.sanitize(payload, collate=True)
